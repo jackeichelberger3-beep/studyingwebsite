@@ -4,8 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Minimal Dark — Single file (js separate)</title>
-
-  <!-- Inline styles so the HTML file is self-contained and easy to edit -->
   <style>
   :root{
     --bg: #0b0b0b;
@@ -91,11 +89,14 @@
     .main{padding:18px}
   }
 
-  /* small helpers to make editable areas stand out during development */
   .editable-hint{font-size:13px;color:var(--muted);margin-top:10px}
   .link-preview{margin-top:12px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
   .link-preview iframe{width:100%;height:360px;border:0;background:#000}
   .params-list{font-family:monospace;font-size:13px;color:var(--muted);margin-top:8px}
+  .form-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .form-row input[type="text"], .form-row select, .form-row textarea{background:#0b0b0b;border:1px solid rgba(255,255,255,0.04);color:#e6e6e6;padding:8px;border-radius:6px;flex:1}
+  .form-row button{padding:8px 12px;border-radius:6px;border:0;background:rgba(255,255,255,0.06);color:#e6e6e6;cursor:pointer}
+  .small{font-size:13px;color:var(--muted)}
   </style>
 </head>
 <body>
@@ -109,15 +110,17 @@
       </div>
 
       <nav class="nav" role="navigation" id="mainNav">
-        <!-- These links change the hash. Add new links or update href to add pages. -->
         <a class="nav-link" href="#/home" data-route="home">
           <span class="icon">🏠</span><span class="label">Home</span>
         </a>
         <a class="nav-link" href="#/info" data-route="info">
           <span class="icon">ℹ️</span><span class="label">Information</span>
         </a>
-        <a class="nav-link" href="#/url?u=https%3A%2F%2Fexample.com" data-route="url">
-          <span class="icon">🔗</span><span class="label">URL Example</span>
+        <a class="nav-link" href="#/embed" data-route="embed">
+          <span class="icon">🔗</span><span class="label">Embed URL</span>
+        </a>
+        <a class="nav-link" href="#/html" data-route="html">
+          <span class="icon">📄</span><span class="label">Embed HTML</span>
         </a>
         <a class="nav-link" href="#/urls" data-route="urls">
           <span class="icon">🗂️</span><span class="label">URLs list</span>
@@ -143,9 +146,7 @@
     </main>
   </div>
 
-  <!-- Pages definitions (kept in a separate JS file for easy editing) -->
   <script src="assets/pages.js" defer></script>
-  <!-- Main behavior (kept separate) -->
   <script src="assets/script.js" defer></script>
 </body>
 </html>
