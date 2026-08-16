@@ -1,9 +1,8 @@
 /* assets/script.js
-   Router + interactive handlers for embed pages and game library.
-   - Handles rendering, blob creation for HTML entries, and the "allow-unsafe" dev toggle.
+   Simple, robust router + page initializers.
 */
 
-(() => {
+(function(){
   const app = document.querySelector('.app');
   const sidebar = document.getElementById('sidebar');
   const toggle = document.getElementById('sidebarToggle');
@@ -12,9 +11,10 @@
   const mainSubtitle = document.getElementById('pageSubtitle');
   const content = document.getElementById('appContent');
 
-  // remember collapsed state
-  const saved = localStorage.getItem('sidebarCollapsed') === 'true';
-  if (saved) app.classList.add('collapsed');
+  // restore collapsed state
+  try {
+    if (localStorage.getItem('sidebarCollapsed') === 'true') app.classList.add('collapsed');
+  } catch(e){}
 
   // sidebar toggle behavior
   toggle.addEventListener('click', () => {
@@ -23,11 +23,11 @@
       sidebar.classList.add('open');
       overlay.hidden = false;
       overlay.classList.add('show');
-      toggle.setAttribute('aria-expanded', 'true');
+      toggle.setAttribute('aria-expanded','true');
     } else {
       app.classList.toggle('collapsed');
       const collapsed = app.classList.contains('collapsed');
-      localStorage.setItem('sidebarCollapsed', collapsed);
+      try { localStorage.setItem('sidebarCollapsed', collapsed); } catch(e){}
       toggle.setAttribute('aria-expanded', String(!collapsed));
     }
   });
@@ -35,6 +35,280 @@
   overlay.addEventListener('click', () => {
     sidebar.classList.remove('open');
     overlay.classList.remove('show');
+    setTimeout(()=> overlay.hidden = true, 250);
+    toggle.setAttribute('aria-expanded','false');
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape' && sidebar.classList.contains('open')) overlay.click();
+  });
+
+  document.querySelectorAll('.nav-link').forEach(a => {
+    a.addEventListener('click', () => {
+      if (window.matchMedia('(max-width:900px)').matches) overlay.click();
+    });
+  });
+
+  let lastMobile = window.matchMedia('(max-width:900px)').matches;
+  window.addEventListener('resize', () => {
+    const isMobile = window.matchMedia('(max-width:900px)').matches;
+    if (lastMobile && !isMobile) {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('show');
+      overlay.hidden = true;
+    }
+    lastMobile = isMobile;
+  });
+
+  // parse hash: returns {route, params}
+  function parseHash(h) {
+    if (!h || h === '#') return { route: 'home', params: {} };
+    const raw = h.startsWith('#') ? h.substring(1) : h;
+    const [path, q] = raw.split('?');
+    const route = (path.startsWith('/') ? path.substring(1) : path) || 'home';
+    const params = {};
+    if (q) q.split('&').forEach(pair => {
+      const [k,v=''] = pair.split('=');
+      try { params[decodeURIComponent(k)] = decodeURIComponent(v||''); } catch(e){ params[k]=v; }
+    });
+    return { route, params };
+  }
+
+  // blob management
+  let currentBlob = null;
+  function createBlob(html){
+    if (currentBlob) {
+      try { URL.revokeObjectURL(currentBlob.url); } catch(e){}
+      currentBlob = null;
+    }
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    currentBlob = { url, revoke() { try { URL.revokeObjectURL(url); } catch(e){} } };
+    return currentBlob;
+  }
+  function revokeBlob(){
+    if (currentBlob && currentBlob.revoke) { currentBlob.revoke(); currentBlob = null; }
+  }
+
+  // mark active nav link (top-level matching)
+  function setActiveNav(route) {
+    const top = route.split('/')[0];
+    document.querySelectorAll('.nav-link').forEach(a => {
+      const dr = a.getAttribute('data-route') || a.getAttribute('href')?.split('?')[0]?.replace('#/','');
+      a.classList.toggle('active', dr === top);
+    });
+  }
+
+  // render page from route key
+  function renderRoute(route, params) {
+    // prefer exact match in TEMPLATES
+    const fn = (window.TEMPLATES && window.TEMPLATES[route]) ? window.TEMPLATES[route]
+             : (window.TEMPLATES && window.TEMPLATES[route.replace(/^\/|\/$/g,'')]) ? window.TEMPLATES[route.replace(/^\/|\/$/g,'')]
+             : (window.TEMPLATES && window.TEMPLATES.home) ? window.TEMPLATES.home
+             : null;
+
+    if (!fn) {
+      mainTitle.textContent = 'Not found';
+      mainSubtitle.textContent = '';
+      content.innerHTML = `<article><h2>404</h2><p class="muted">No template for route: ${escapeHtml(route)}</p></article>`;
+      return;
+    }
+
+    const page = fn(params || {});
+    mainTitle.textContent = page.title || '';
+    mainSubtitle.textContent = page.subtitle || '';
+    // revoke any previous blob
+    revokeBlob();
+    // insert html (safe innerHTML because admin is editing code)
+    content.innerHTML = page.html || '';
+    setActiveNav(route);
+    // initialize interactive elements for this page
+    setTimeout(()=> initInteractive(route, params), 0);
+  }
+
+  // initializer for interactive controls; safe guards when elements don't exist
+  function initInteractive(route, params) {
+    // Free-form embed handlers
+    const embedUrlInput = document.getElementById('embedUrl');
+    const embedLoadBtn = document.getElementById('embedLoad');
+    const embedSandboxSelect = document.getElementById('embedSandbox');
+    const embedPreviewToggle = document.getElementById('embedPreviewToggle');
+    const embedArea = document.getElementById('embedArea');
+    const embedFrame = document.getElementById('embedFrame');
+    const embedMessage = document.getElementById('embedMessage');
+    const embedNewTab = document.getElementById('embedNewTab');
+
+    if (embedLoadBtn && embedUrlInput) {
+      embedLoadBtn.addEventListener('click', ()=> {
+        const u = embedUrlInput.value.trim();
+        if (!u) { if (embedMessage) embedMessage.textContent = 'Enter a URL.'; return; }
+        if (embedFrame) embedFrame.src = u;
+        if (embedSandboxSelect && embedFrame) embedFrame.setAttribute('sandbox', embedSandboxSelect.value || '');
+        if (embedArea) embedArea.style.display = 'block';
+        if (embedMessage) embedMessage.textContent = 'Loaded — if blocked, use Open in new tab.';
+      });
+    }
+    if (embedSandboxSelect && embedFrame) {
+      embedSandboxSelect.addEventListener('change', ()=> embedFrame.setAttribute('sandbox', embedSandboxSelect.value || ''));
+    }
+    if (embedPreviewToggle && embedArea) {
+      embedPreviewToggle.addEventListener('click', ()=> {
+        const showing = embedArea.style.display !== 'none';
+        embedArea.style.display = showing ? 'none' : 'block';
+        embedPreviewToggle.textContent = showing ? 'Show Preview' : 'Hide Preview';
+      });
+    }
+    if (embedNewTab && embedUrlInput) {
+      embedNewTab.addEventListener('click', ()=> {
+        const u = embedUrlInput.value.trim();
+        if (u) window.open(u, '_blank', 'noopener');
+      });
+    }
+
+    // Embed HTML handlers (blob creation)
+    const htmlSource = document.getElementById('htmlSource');
+    const htmlFile = document.getElementById('htmlFile');
+    const htmlRender = document.getElementById('htmlRender');
+    const htmlOpen = document.getElementById('htmlOpen');
+    const htmlSandbox = document.getElementById('htmlSandbox');
+    const htmlMsg = document.getElementById('htmlMsg');
+    const htmlPreview = document.getElementById('htmlPreview');
+    const htmlFrame = document.getElementById('htmlFrame');
+
+    if (htmlRender && htmlSource) {
+      htmlRender.addEventListener('click', ()=> {
+        const text = htmlSource.value;
+        if (!text) { if (htmlMsg) htmlMsg.textContent = 'Paste HTML first.'; return; }
+        const b = createBlob(text);
+        if (htmlFrame) htmlFrame.src = b.url;
+        if (htmlFrame && htmlSandbox) htmlFrame.setAttribute('sandbox', htmlSandbox.value || '');
+        if (htmlPreview) htmlPreview.style.display = 'block';
+        if (htmlMsg) htmlMsg.textContent = 'Rendered below.';
+      });
+    }
+    if (htmlFile && htmlSource) {
+      htmlFile.addEventListener('change', (ev) => {
+        const f = ev.target.files && ev.target.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = (e) => { htmlSource.value = e.target.result || ''; };
+        reader.readAsText(f);
+      });
+    }
+    if (htmlOpen) {
+      htmlOpen.addEventListener('click', ()=> {
+        if (currentBlob && currentBlob.url) {
+          window.open(currentBlob.url, '_blank', 'noopener');
+        } else if (htmlSource && htmlSource.value) {
+          const tmp = createBlob(htmlSource.value);
+          window.open(tmp.url, '_blank', 'noopener');
+          setTimeout(()=> { try { tmp.revoke(); } catch(e){} }, 2000);
+        }
+      });
+    }
+    if (htmlSandbox && htmlFrame) {
+      htmlSandbox.addEventListener('change', ()=> htmlFrame.setAttribute('sandbox', htmlSandbox.value || ''));
+    }
+
+    // Preset embed and game pages: detect game iframe controls
+    const gameLoadBtn = document.getElementById('gameLoadBtn');
+    const gameNewTabBtn = document.getElementById('gameNewTabBtn');
+    const gameIframe = document.getElementById('gameIframe');
+    const gameAllowUnsafe = document.getElementById('gameAllowUnsafe');
+    const gameWarning = document.getElementById('gameWarning');
+    const gameArea = document.getElementById('gameArea');
+
+    // If route is game/<key> or g/<key>, load appropriate entry
+    if ((route.startsWith('game/') || route.startsWith('g/')) && gameIframe) {
+      const key = route.split('/')[1];
+      const entry = (window.GAME_LIBRARY || []).find(e => e.key === key);
+      if (!entry) return;
+      // helper to load the entry into iframe
+      let localBlob = null;
+      function loadEntry(){
+        // revoke previous local blob
+        if (localBlob && localBlob.revoke) { try{ localBlob.revoke(); }catch(e){} localBlob = null; }
+        const allowUnsafe = gameAllowUnsafe && gameAllowUnsafe.checked;
+        if (allowUnsafe) {
+          gameWarning && (gameWarning.style.display = 'block');
+          try { gameIframe.removeAttribute('sandbox'); } catch(e){}
+          gameIframe.setAttribute('allow', 'autoplay; fullscreen; microphone; camera; encrypted-media; clipboard-read; clipboard-write');
+        } else {
+          gameWarning && (gameWarning.style.display = 'none');
+          gameIframe.setAttribute('sandbox', entry.sandbox || 'allow-scripts allow-same-origin');
+          gameIframe.removeAttribute('allow');
+        }
+
+        if (entry.type === 'url') {
+          gameIframe.src = entry.url;
+        } else {
+          const created = createBlob(entry.html || '<!doctype html><html><body></body></html>');
+          localBlob = created;
+          gameIframe.src = created.url;
+          // keep global reference for open-in-tab
+          currentBlob = created;
+        }
+        gameArea && (gameArea.style.display = 'block');
+      }
+
+      // bind buttons
+      if (gameLoadBtn) gameLoadBtn.addEventListener('click', loadEntry);
+      if (gameNewTabBtn) gameNewTabBtn.addEventListener('click', ()=> {
+        if (entry.type === 'url') window.open(entry.url, '_blank', 'noopener');
+        else if (currentBlob && currentBlob.url) window.open(currentBlob.url, '_blank', 'noopener');
+        else {
+          const tmp = createBlob(entry.html || '<!doctype html><html><body></body></html>');
+          window.open(tmp.url, '_blank', 'noopener');
+          setTimeout(()=> { try{ tmp.revoke(); }catch(e){} }, 2000);
+        }
+      });
+      if (gameAllowUnsafe) gameAllowUnsafe.addEventListener('change', loadEntry);
+
+      // auto-load if preview option set
+      if (entry.preview) setTimeout(loadEntry, 30);
+    }
+
+    // Preset embed pages: they reuse embed controls (embedFrame etc.)
+    // If this is an embed/<key> route and embedFrame exists, wire Open-in-tab to preset url in the input
+    if (route.startsWith('embed/') && embedFrame) {
+      // find preset url from embedUrl input (prefilled by template)
+      if (embedPreviewToggle) {
+        embedPreviewToggle.addEventListener('click', ()=> {
+          const embedAreaLocal = document.getElementById('embedArea');
+          const showing = embedAreaLocal && embedAreaLocal.style.display !== 'none';
+          embedPreviewToggle.textContent = showing ? 'Show Preview' : 'Hide Preview';
+        });
+      }
+      if (embedNewTab && embedUrlInput) {
+        embedNewTab.addEventListener('click', ()=> {
+          const u = embedUrlInput.value.trim();
+          if (u) window.open(u, '_blank', 'noopener');
+        });
+      }
+    }
+  }
+
+  // main router
+  function router(){
+    const { route, params } = parseHash(location.hash);
+    renderRoute(route, params);
+  }
+
+  window.addEventListener('hashchange', router);
+  document.addEventListener('DOMContentLoaded', ()=> {
+    if (!location.hash) location.hash = '#/home';
+    router();
+  });
+
+  // reset button behavior
+  document.querySelectorAll('#themeReset').forEach(btn => {
+    btn.addEventListener('click', ()=> {
+      try { localStorage.removeItem('sidebarCollapsed'); } catch(e){}
+      app.classList.remove('collapsed');
+    });
+  });
+
+})();    overlay.classList.remove('show');
     setTimeout(()=> overlay.hidden = true, 250);
     toggle.setAttribute('aria-expanded', 'false');
   });
