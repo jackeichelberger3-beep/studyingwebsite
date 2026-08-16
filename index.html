@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Minimal Dark — Single file (js separate)</title>
+
+  <!-- Inline styles so the HTML file is self-contained and easy to edit -->
+  <style>
+  :root{
+    --bg: #0b0b0b;
+    --panel: #121212;
+    --muted: #9aa0a6;
+    --accent: #bfbfbf;
+    --glass: rgba(255,255,255,0.02);
+    --radius: 10px;
+    --sidebar-w: 240px;
+    --sidebar-collapsed-w: 72px;
+    --transition: 240ms cubic-bezier(.2,.9,.3,1);
+    color-scheme: dark;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:linear-gradient(180deg,var(--bg),#070707);
+    color:#e6e6e6;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    font-size:16px;
+  }
+  .app{
+    display:flex;
+    min-height:100vh;
+    align-items:stretch;
+    position:relative;
+  }
+  .sidebar{
+    width:var(--sidebar-w);
+    background:linear-gradient(180deg,var(--panel),#0f0f0f);
+    border-right:1px solid rgba(255,255,255,0.03);
+    padding:18px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    transition:width var(--transition), transform var(--transition);
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand-text{font-weight:600;letter-spacing:0.4px;color:var(--accent)}
+  .toggle-btn{
+    background:transparent;border:0;color:var(--accent);padding:6px;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;border-radius:8px;
+  }
+  .toggle-btn:focus{outline:2px solid rgba(191,191,191,0.12)}
+  .nav{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  .nav-link{
+    display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--muted);
+    padding:10px;border-radius:8px;transition:background var(--transition), color var(--transition);
+  }
+  .nav-link .icon{width:24px;text-align:center;font-size:18px}
+  .nav-link:hover{background:var(--glass);color:var(--accent)}
+  .nav-link.active{background:rgba(255,255,255,0.03);color:var(--accent)}
+  .sidebar-footer{margin-top:auto;display:flex;justify-content:center}
+  .ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px 10px;border-radius:8px;cursor:pointer}
+
+  .app.collapsed .sidebar{width:var(--sidebar-collapsed-w)}
+  .app.collapsed .brand-text,
+  .app.collapsed .label{display:none}
+  .app.collapsed .nav-link{justify-content:center}
+  .app.collapsed .sidebar-footer{display:none}
+
+  .main{flex:1;padding:28px;min-height:100vh;transition:margin var(--transition)}
+  .main-header h1{margin:0;font-size:20px;color:var(--accent)}
+  .muted{color:var(--muted);margin:0 0 8px 0}
+  .content{margin-top:18px;max-width:920px}
+  article{
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    padding:20px;border-radius:var(--radius);border:1px solid rgba(255,255,255,0.02);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+  h2{margin-top:0;color:#fff}
+
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:50;opacity:0;transition:opacity var(--transition)}
+  .overlay.show{opacity:1}
+
+  @media (max-width:900px){
+    .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-110%);z-index:60;width:var(--sidebar-w);box-shadow: 8px 0 30px rgba(0,0,0,0.6)}
+    .sidebar.open{transform:translateX(0)}
+    .app.collapsed .sidebar{width:var(--sidebar-w)}
+    .main{padding:18px}
+  }
+
+  /* small helpers to make editable areas stand out during development */
+  .editable-hint{font-size:13px;color:var(--muted);margin-top:10px}
+  .link-preview{margin-top:12px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+  .link-preview iframe{width:100%;height:360px;border:0;background:#000}
+  .params-list{font-family:monospace;font-size:13px;color:var(--muted);margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Primary" id="sidebar">
+      <div class="brand">
+        <button id="sidebarToggle" class="toggle-btn" aria-label="Toggle menu" aria-expanded="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <span class="brand-text">DarkSite</span>
+      </div>
+
+      <nav class="nav" role="navigation" id="mainNav">
+        <!-- These links change the hash. Add new links or update href to add pages. -->
+        <a class="nav-link" href="#/home" data-route="home">
+          <span class="icon">🏠</span><span class="label">Home</span>
+        </a>
+        <a class="nav-link" href="#/info" data-route="info">
+          <span class="icon">ℹ️</span><span class="label">Information</span>
+        </a>
+        <a class="nav-link" href="#/url?u=https%3A%2F%2Fexample.com" data-route="url">
+          <span class="icon">🔗</span><span class="label">URL Example</span>
+        </a>
+        <a class="nav-link" href="#/urls" data-route="urls">
+          <span class="icon">🗂️</span><span class="label">URLs list</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="themeReset" class="ghost">Reset</button>
+      </div>
+    </aside>
+
+    <div class="overlay" id="overlay" hidden></div>
+
+    <main class="main" id="main">
+      <header class="main-header">
+        <h1 id="pageTitle">Welcome</h1>
+        <p class="muted" id="pageSubtitle">Sleek · Simple · Dark</p>
+      </header>
+
+      <section class="content" id="appContent">
+        <!-- Pages render here -->
+      </section>
+    </main>
+  </div>
+
+  <!-- Pages definitions (kept in a separate JS file for easy editing) -->
+  <script src="assets/pages.js" defer></script>
+  <!-- Main behavior (kept separate) -->
+  <script src="assets/script.js" defer></script>
+</body>
+</html>
